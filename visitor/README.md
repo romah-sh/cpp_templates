@@ -1,3 +1,36 @@
+# Visitor pattern
+## Used classes
+1. List to store visitable types
+```
+TypeTraits::TypeList<VisitableTypes...>
+```
+2. Base visitable class
+```
+using VisitableList = TypeTraits::TypeList<VisitableTypes...>
+Visitor::BaseVisitable<VisitableList> {};
+```
+Inherit base visitable class from `Visitor::BaseVisitable`
+
+3. Parent class for all inherited visitable classes
+```
+Visitor::OverriddenVisitable<BaseVisitable, CurrentVisitable, VisitableList>
+```
+where
+* `BaseVisitable` - base class for all visitable classes
+* `CurrentVisitable` - current visitable class
+* `VisitableList` - list of all visitable child classes
+
+Inherit all visitable classes from `Visitor::OverriddenVisitable`
+
+4. Visitor class
+```
+Visitor::Generic<VisitableList, ConcreteVisitor>
+```
+where
+* `VisitableList` - list of all visitable child classes
+* `ConcreteVisitor` - callable object, which accepts all types from `VisitableList`
+
+If `ConcreteVisitor` accepts not all visitable classes, it must contain template function, which accept all remained types
 # Usage
 1. Create base class `A` and child classes `B`, `C`, `D`
 2. Account child classes in Accept list
@@ -8,60 +41,62 @@
 #include <iostream>
 #include "Visitable.h"
 // 1
-struct B;
-struct C;
-struct D;
+struct ChildA;
+struct ChildB;
+struct ChildC;
 
 //2
-using AcceptList = TypeTraits::TypeList<B, C, D>;
+using AcceptList = TypeTraits::TypeList<ChildA, ChildB, ChildC>;
 
-struct A : Visitor::BaseVisitable<AcceptList> {};
+struct BaseParent : Visitor::BaseVisitable<AcceptList> {};
 
-struct B  : Visitor::OverriddenVisitable<A, B, AcceptList> {
+struct ChildA : Visitor::OverriddenVisitable<BaseParent, ChildA, AcceptList> {
+    char a = 'A';
+};
+struct ChildB : Visitor::OverriddenVisitable<BaseParent, ChildB, AcceptList> {
     char b = 'B';
 };
-struct C  : Visitor::OverriddenVisitable<A, C, AcceptList> {
+struct ChildC : Visitor::OverriddenVisitable<BaseParent, ChildC, AcceptList> {
     char c = 'C';
-};
-struct D : Visitor::OverriddenVisitable<A, D, AcceptList> {
-    char d = 'D';
 };
 
 // 3
 auto func = [](auto&& _p) {
-    if constexpr (std::is_same_v<std::decay_t<decltype(_p)>, B>) {
-        std::cout << "B " << _p.b << std::endl;
+    if constexpr (std::is_same_v<std::decay_t<decltype(_p)>, ChildA>) {
+        std::cout << "ChildA " << _p.a << std::endl;
     }
-    else if constexpr (std::is_same_v<std::decay_t<decltype(_p)>, D>) {
-        std::cout << "D " << _p.d << std::endl;
+    else if constexpr (std::is_same_v<std::decay_t<decltype(_p)>, ChildC>) {
+        std::cout << "ChildC " << _p.c << std::endl;
     } 
     else {
-        std::cout << "other " << std::endl;
+        // ChildB
+        std::cout << "other" << std::endl;
     }
 };
 
 // 4
 struct ConcreteVisitor {
-    void operator()(const C& a) {
-        std::cout << "C " << a.c << std::endl;
+    void operator()(const ChildB& a) {
+        std::cout << "B " << a.b << std::endl;
     }
     template <typename T>
     void operator()(const T& t) {
+        // ChildA, ChildC
         std::cout << "other" << std::endl;
     }
 };
 
 // 5
-D d;
-A& ad = d;
-C c;
-A& ac = c;
+ChildC c;
+BaseParent& bpc = c;
+ChildB b;
+BaseParent& bpb = b;
 
 Visitor::Generic<AcceptList, decltype(func)> gv(func);
-ad.accept(gv); // prints "D D"
-ac.accept(gv); // prints "other"
+bpc.accept(gv); // prints "ChildC C"
+bpb.accept(gv); // prints "other"
 
 Visitor::Generic<AcceptList, ConcreteVisitor> cv(ConcreteVisitor{});
-ad.accept(cv); // prints "other"
-ac.accept(cv); // prints "C C"
+bpc.accept(cv); // prints "other"
+bpb.accept(cv); // prints "ChildB B"
 ```
